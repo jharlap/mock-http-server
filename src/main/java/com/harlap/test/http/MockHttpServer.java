@@ -19,8 +19,10 @@ import java.io.IOException;
 import java.io.PrintStream;
 import java.net.InetSocketAddress;
 import java.net.SocketAddress;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Map.Entry;
 
 import org.simpleframework.http.Request;
 import org.simpleframework.http.Response;
@@ -29,6 +31,12 @@ import org.simpleframework.transport.connect.Connection;
 import org.simpleframework.transport.connect.SocketConnection;
 
 public class MockHttpServer {
+    
+        /**
+         * specific header type for content-type
+         */
+        public static final String CONTENT_TYPE = "Content-Type";
+    
 	public enum Method {
 		GET, POST, PUT, DELETE;
 	}
@@ -90,22 +98,28 @@ public class MockHttpServer {
 
 	private class ExpectedResponse {
 		private int statusCode;
-		private String contentType;
+		private final Map<String, String> headers = new HashMap<String, String>();
 		private String body;
 
 		public ExpectedResponse(int statusCode, String contentType, String body) {
 			this.statusCode = statusCode;
-			this.contentType = contentType;
+			this.headers.put(MockHttpServer.CONTENT_TYPE, contentType);
 			this.body = body;
 		}
+		
+		public ExpectedResponse(final int statusCode, final Map<String, String> headers, final String body) {
+	            this.statusCode = statusCode;
+	            this.headers.putAll(headers);
+	            this.body = body;
+	        }
 
 		public int getStatusCode() {
 			return statusCode;
 		}
 
-		public String getContentType() {
-			return contentType;
-		}
+		public Map<String, String> getHeaders() {
+	            return Collections.unmodifiableMap(this.headers);
+	        }
 
 		public String getBody() {
 			return body;
@@ -139,7 +153,7 @@ public class MockHttpServer {
 				ExpectedResponse expectedResponse = responsesForRequests
 						.get(expectedRequest);
 				response.setCode(expectedResponse.getStatusCode());
-				response.set("Content-Type", expectedResponse.getContentType());
+				setHttpHeadersToResponse(response, expectedResponse);
 				PrintStream body = null;
 				try {
 					body = response.getPrintStream();
@@ -152,7 +166,7 @@ public class MockHttpServer {
 				body.close();
 			} else {
 				response.setCode(500);
-				response.set("Content-Type", "text/plain;charset=utf-8");
+				response.set(MockHttpServer.CONTENT_TYPE, "text/plain;charset=utf-8");
 				PrintStream body;
 				try {
 					body = response.getPrintStream();
@@ -164,6 +178,16 @@ public class MockHttpServer {
 				}
 			}
 		}
+		
+		/**
+	         * @param response
+	         * @param expectedResponse
+	         */
+	        private void setHttpHeadersToResponse(final Response response, final ExpectedResponse expectedResponse) {
+	            for (final Entry<String, String> headerEntry : expectedResponse.getHeaders().entrySet()) {
+	                response.set(headerEntry.getKey(), headerEntry.getValue());
+	            }
+	        }
 
 		public void addExpectedRequest(ExpectedRequest request) {
 			lastAddedExpectation = request;
@@ -222,6 +246,11 @@ public class MockHttpServer {
 				contentType, body));
 		return this;
 	}
+	
+	public MockHttpServer respondWith(final int statusCode, final Map<String, String> headers, final String body) {
+	        this.handler.addExpectedResponse(new ExpectedResponse(statusCode, headers, body));
+	        return this;
+	    }
 
 	public MockHttpServer expect(Method method, String path, String data) {
 		handler.addExpectedRequest(new ExpectedRequest(method, path, data));

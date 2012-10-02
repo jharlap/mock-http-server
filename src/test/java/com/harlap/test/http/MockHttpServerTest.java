@@ -18,6 +18,8 @@ package com.harlap.test.http;
 import static org.junit.Assert.*;
 
 import java.io.IOException;
+import java.util.HashMap;
+import java.util.Map;
 
 import org.apache.commons.io.IOUtils;
 import org.apache.http.HttpResponse;
@@ -35,7 +37,7 @@ import org.junit.After;
 import org.junit.Before;
 import org.junit.Test;
 
-public class MockHttpServerBehaviour {
+public class MockHttpServerTest {
 
 	private static final int PORT = 51234;
 	private static final String baseUrl = "http://localhost:" + PORT;
@@ -58,9 +60,10 @@ public class MockHttpServerBehaviour {
 	@Test
 	public void testShouldHandleGetRequests() throws ClientProtocolException,
 			IOException {
+	        final String contentType = "text/plain";
 		// Given a mock server configured to respond to a GET / with "OK"
 		server.expect(MockHttpServer.Method.GET, "/").respondWith(200,
-				"text/plain", "OK");
+		        contentType, "OK");
 
 		// When a request for GET / arrives
 		HttpGet req = new HttpGet(baseUrl + "/");
@@ -73,6 +76,9 @@ public class MockHttpServerBehaviour {
 		
 		// And the status code is 200
 		assertEquals(200, statusCode);
+		
+		// And the Content-Type header is there with the correct value
+	        assertEquals(contentType, response.getFirstHeader(MockHttpServer.CONTENT_TYPE).getValue());
 	}
 
 	@Test
@@ -229,5 +235,30 @@ public class MockHttpServerBehaviour {
 	public void testVerifyDoNothingWhenNoExceptations() {
 		server.verify();
 	}
+	
+	@Test
+	public void testShouldReplyWithCorrectHeaders() throws IllegalStateException, IOException {
+	        // Given a mock server configured to respond to a GET / with "OK" with specific headers
+	        final Map<String, String> httpHeaders = new HashMap<String, String>();
+	        httpHeaders.put(MockHttpServer.CONTENT_TYPE, "application/xml");
+	        httpHeaders.put("fakeHttpHeader", "fakeHttpValue");
+	        this.server.expect(MockHttpServer.Method.GET, "/").respondWith(200, httpHeaders, "OK");
+	        
+	        // When a request for GET / arrives
+	        final HttpGet req = new HttpGet(MockHttpServerTest.baseUrl + "/");
+	        final HttpResponse response = this.client.execute(req);
+	        final String responseBody = IOUtils.toString(response.getEntity().getContent());
+	        final int statusCode = response.getStatusLine().getStatusCode();
+	        
+	        // Then the response is "OK"
+	        assertEquals("OK", responseBody);
+	        
+	        // And the status code is 200
+	        assertEquals(200, statusCode);
+	        
+	        // And our http headers are there
+	        assertEquals("fakeHttpValue", response.getFirstHeader("fakeHttpHeader").getValue());
+	        assertEquals("application/xml", response.getFirstHeader(MockHttpServer.CONTENT_TYPE).getValue());
+	    }
 
 }
